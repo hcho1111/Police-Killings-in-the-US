@@ -1,0 +1,601 @@
+---
+title: "Exploratory Data Analysis"
+author: "STOR 320 Group 4"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(Hmisc)
+library(modelr)
+library(dplyr)
+library(xtable)
+library(forcats)
+library(formattable)
+library(rvest)
+library(glmnet)
+
+# Import Data Below
+PoliceKillings<-read_csv("PKcleanP2.csv")
+
+# Add DC to the South region
+PoliceKillings$region[which(PoliceKillings$State=="DC")]<-"South"
+```
+
+## Question 1: Which model best predicts the median household income of a police killing victim?
+
+```{r}
+library(tidyverse)    #Essential Functions
+library(modelr)       #Helpful Functions in Modeling
+library(purrr)
+library(broom)
+```
+
+```{r}
+MedKillings = PoliceKillings %>% 
+  select(-Name, -Month, -Day, -Year, -Street_Address, -stateFIPS, -countyFIPS, -tractID, -countyID, -tract, -City, -Latitude, -Longitude) %>% 
+  mutate( 
+    med.tract.household.inc = as.numeric(unlist(med.tract.household.inc)),
+    Age = as.numeric(Age),
+    Gender = as.factor(Gender), 
+    Race = as.factor(Race), 
+    State = as.factor(State),
+    region = as.factor(region), 
+    Law_Enforcement_Agency = as.factor(Law_Enforcement_Agency), 
+    Cause_Of_Death = as.factor(Cause_Of_Death),
+    Armed = as.factor(Armed)
+    ) 
+
+summary(PoliceKillings)
+str(MedKillings)
+```
+
+```{r}
+MedKillings = MedKillings %>% 
+  na.omit
+MedKillings2=MedKillings[,c("Age","Gender","Race","Population", "Proportion_White", "med.tract.household.inc", "tractvcount.percentile", "inc.quint.nat", "Poverty_Rate", "Unemployment_Rate", "Proportion_Attended_College")]
+MedKillings2 = MedKillings2 %>% 
+  select(med.tract.household.inc, everything())
+
+summary(MedKillings2)
+
+y=MedKillings2$med.tract.household.inc
+X=model_matrix(MedKillings2,med.tract.household.inc~.*.)[,-1]
+var.names=names(X)
+dim(X)
+```
+
+
+```{r}
+set.seed(252)
+cvmod.0=cv.glmnet(y=y,x=as.matrix(X),alpha=0)
+set.seed(252)
+cvmod.01=cv.glmnet(y=y,x=as.matrix(X),alpha=0.1)
+set.seed(252)
+cvmod.2=cv.glmnet(y=y,x=as.matrix(X),alpha=0.2)
+set.seed(252)
+cvmod.3=cv.glmnet(y=y,x=as.matrix(X),alpha=0.3)
+set.seed(252)
+cvmod.4=cv.glmnet(y=y,x=as.matrix(X),alpha=0.4)
+set.seed(252)
+cvmod.5=cv.glmnet(y=y,x=as.matrix(X),alpha=0.5)
+set.seed(252)
+cvmod.6=cv.glmnet(y=y,x=as.matrix(X),alpha=0.6)
+set.seed(252)
+cvmod.7=cv.glmnet(y=y,x=as.matrix(X),alpha=0.7)
+set.seed(252)
+cvmod.8=cv.glmnet(y=y,x=as.matrix(X),alpha=0.8)
+set.seed(252)
+cvmod.9=cv.glmnet(y=y,x=as.matrix(X),alpha=0.9)
+set.seed(252)
+cvmod.1=cv.glmnet(y=y,x=as.matrix(X),alpha=1)
+
+
+CV.0.ERROR=cvmod.0$cvm[which(cvmod.0$lambda==cvmod.0$lambda.1se)]
+CV.01.ERROR=cvmod.0$cvm[which(cvmod.01$lambda==cvmod.01$lambda.1se)]
+CV.2.ERROR=cvmod.0$cvm[which(cvmod.2$lambda==cvmod.2$lambda.1se)]
+CV.3.ERROR=cvmod.0$cvm[which(cvmod.3$lambda==cvmod.3$lambda.1se)]
+CV.4.ERROR=cvmod.0$cvm[which(cvmod.4$lambda==cvmod.4$lambda.1se)]
+CV.5.ERROR=cvmod.0$cvm[which(cvmod.5$lambda==cvmod.5$lambda.1se)]
+CV.6.ERROR=cvmod.0$cvm[which(cvmod.6$lambda==cvmod.6$lambda.1se)]
+CV.7.ERROR=cvmod.0$cvm[which(cvmod.7$lambda==cvmod.7$lambda.1se)]
+CV.8.ERROR=cvmod.0$cvm[which(cvmod.8$lambda==cvmod.8$lambda.1se)]
+CV.9.ERROR=cvmod.0$cvm[which(cvmod.9$lambda==cvmod.9$lambda.1se)]
+CV.1.ERROR=cvmod.0$cvm[which(cvmod.1$lambda==cvmod.1$lambda.1se)]
+
+
+MOD.RESULT=tibble(alpha=c(0,0.1,0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+                  lambda=c(cvmod.0$lambda.1se,cvmod.01$lambda.1se,
+                           cvmod.2$lambda.1se, cvmod.3$lambda.1se,
+                           cvmod.4$lambda.1se, cvmod.5$lambda.1se,
+                           cvmod.6$lambda.1se, cvmod.7$lambda.1se,
+                           cvmod.8$lambda.1se, cvmod.9$lambda.1se,
+                           cvmod.1$lambda.1se),
+                  CV.Error=c(CV.0.ERROR,CV.01.ERROR,CV.2.ERROR,
+                             CV.3.ERROR,CV.4.ERROR,CV.5.ERROR,
+                             CV.6.ERROR,CV.7.ERROR,CV.8.ERROR,
+                             CV.9.ERROR,CV.1.ERROR))
+print(MOD.RESULT)
+```
+
+```{r,eval=F}
+best.alpha=MOD.RESULT$alpha[which.min(MOD.RESULT$CV.Error)]
+best.lambda=MOD.RESULT$lambda[which.min(MOD.RESULT$CV.Error)]
+
+best.mod=glmnet(y=y,x=as.matrix(X),nlambda=1,lambda=best.lambda,alpha=best.alpha)
+best.coef=as.tibble(as.matrix(coef(best.mod)))
+best.coef2=best.coef %>% 
+              mutate(Parameter=c("Int",var.names)) %>%
+              rename(Estimate=s0) %>%
+              select(Parameter,Estimate)
+nonzero.best.coef=best.coef2 %>%
+                    filter(Estimate!=0)
+print(nonzero.best.coef,n=1e3)
+
+MedKillings2$med.tract.household.inc.hat=predict(best.mod,newx=as.matrix(X))
+
+ggplot(MedKillings2) +
+  geom_point(aes(x=med.tract.household.inc,y=med.tract.household.inc.hat),color="lightskyblue2") +
+  geom_abline(linetype="dashed") +
+  theme_minimal() 
+
+ggplot(MedKillings2) +
+  geom_histogram(aes(x=med.tract.household.inc-med.tract.household.inc.hat),fill="lightskyblue2") +
+  theme_minimal() +
+  xlab("Residuals") +
+  ylab("Frequency")
+```
+
+
+```{r}
+library(glmnet)
+X=model.matrix(med.tract.household.inc ~., MedKillings2)
+
+ridge.graph=glmnet(x=as.matrix(X),
+                 y=as.numeric(MedKillings2$med.tract.household.inc),
+                 alpha=0)
+plot(ridge.graph,xvar ="lambda")
+
+lasso.graph=glmnet(x=as.matrix(X),
+                 y=as.numeric(MedKillings2$med.tract.household.inc),
+                 alpha=1)
+plot(lasso.graph,xvar="lambda")
+
+enet.graph=glmnet(x=as.matrix(X),
+                 y=as.numeric(MedKillings2$med.tract.household.inc),
+                 alpha=1/2)
+plot(enet.graph,xvar="lambda")
+```
+
+
+```{r}
+
+set.seed(252)
+in.train=sample(1:461,floor(0.66*461))
+MED.TRAIN=MedKillings2[in.train,]
+MED.TEST=MedKillings2[-in.train,]
+
+X=model.matrix(med.tract.household.inc~., MED.TRAIN)
+X1=model.matrix(med.tract.household.inc~., MED.TEST)
+
+RESULT=NULL
+for (i in 0:10) {
+    cv.out = cv.glmnet(x=as.matrix(X),
+                       y=as.numeric(MED.TRAIN$med.tract.household.inc),
+                       type.measure="mse", 
+                       alpha=i/10)
+    alpha=i/10
+    best.lambda=cv.out$lambda.1se
+    y.test=predict(cv.out,s=best.lambda,newx=as.matrix(X1))
+    out.mse=mean((MED.TEST$y-y.test)^2)
+    RESULT=rbind(RESULT,c(alpha,best.lambda,out.mse))
+}
+colnames(RESULT)=c("alpha","lambda","MSE")
+print(RESULT)
+```
+
+```{r}
+firstmod = lm(med.tract.household.inc~ med.county.household.inc +tractvcount.percentile + 	med.tract.personal.inc +inc.quint.nat + Poverty_Rate + State + Population + Proportion_Attended_College + State*Proportion_Attended_College	+ Population*med.county.household.inc	+med.tract.personal.inc*med.county.household.inc	+ med.tract.personal.inc*tractvcount.percentile	+med.county.household.inc*tractvcount.percentile	+ med.county.household.inc*inc.quint.nat, data= MedKillings2)
+tidy(firstmod)
+
+MedKillings2_cv1_sec = MedKillings2 %>% 
+  crossv_kfold(10)
+
+head(income_cv1_sec)
+
+train.model.func1 = function(data){
+  fistmod = lm(med.tract.household.inc ~ med.county.household.inc + tractvcount.percentile + med.tract.personal.inc + inc.quint.nat + Poverty_Rate + Population + Proportion_Attended_College + State*Proportion_Attended_College	+Population*med.county.household.inc + med.tract.personal.inc*med.county.household.inc	+med.tract.personal.inc*tractvcount.percentile	+ med.county.household.inc*tractvcount.percentile	+ med.county.household.inc*inc.quint.nat,data=data)
+  return(fistmod)
+}
+train.model.func1(MedKillings2[,which(MedKillings2$fold==2)])
+
+MedKillings2_cv1_third = MedKillings2_cv1_sec %>%
+  mutate(tr.model = map(train,train.model.func1)) 
+
+income_cv1_predict = MedKillings2_cv1_third %>% 
+  mutate(predict = map2(test,tr.model, ~augment(.y,newdata=.x))) %>% 
+  select(predict) %>% 
+  unnest()
+
+head(income_cv1_predict)
+
+bias.func=function(actual,predict){
+  bias=mean((actual-predict),na.rm=T)
+  return(bias)
+}
+
+mae.func=function(actual,predict){
+  mae=mean(abs(actual-predict),na.rm=T)
+  return(mae)
+}
+
+RMSE.func=function(actual,predict){
+  mse=mean((actual-predict)^2,na.rm=T)
+  rmse=sqrt(mse)
+  return(rmse)
+}
+```
+
+
+```{r}
+secmod = lm(med.tract.household.inc~Population + Poverty_Rate, data=income_cv1)
+tidy(secmod)
+
+income_cv2_sec = income_cv1 %>% 
+  crossv_kfold(5)
+
+train.model.func1 = function(data){
+  secmod = lm(med.tract.household.inc~Population + Poverty_Rate, data=income_cv1)
+  return(secmod)
+}
+income_cv2_third = income_cv2_sec %>%
+  mutate(tr.model = map(train,train.model.func1)) 
+
+income_cv2_predict = income_cv2_third %>% 
+  mutate(predict = map2(test,tr.model, ~augment(.y,newdata=.x))) %>% 
+  select(predict) %>% 
+  unnest()
+```
+
+```{r}
+fourmod = lm(med.tract.household.inc~Population + Poverty_Rate + Age, data=income_cv1)
+tidy(fourmod)
+summary(fourmod)
+
+income_cv4_sec = income_cv1 %>% 
+  crossv_kfold(100)
+
+train.model.func1 = function(data){
+  fourmod = lm(med.tract.household.inc~Population + Poverty_Rate + Age, data=income_cv1)
+  return(fourmod)
+}
+income_cv4_third = income_cv4_sec %>%
+  mutate(tr.model = map(train,train.model.func1)) 
+
+income_cv4_predict = income_cv4_third %>% 
+  mutate(predict = map2(test,tr.model, ~augment(.y,newdata=.x))) %>% 
+  select(predict) %>% 
+  unnest()
+```
+
+```{r}
+fivemod = lm(med.tract.household.inc~Population + Poverty_Rate + Age + Proportion_Attended_College, data=income_cv1)
+tidy(fivemod)
+summary(fivemod)
+
+income_cv5_sec = income_cv1 %>% 
+  crossv_kfold(100)
+
+train.model.func1 = function(data){
+  fivemod = lm(med.tract.household.inc~Population + Poverty_Rate + Age + Proportion_Attended_College, data=income_cv1)
+  return(fivemod)
+}
+income_cv5_third = income_cv5_sec %>%
+  mutate(tr.model = map(train,train.model.func1)) 
+
+income_cv5_predict = income_cv5_third %>% 
+  mutate(predict = map2(test,tr.model, ~augment(.y,newdata=.x))) %>% 
+  select(predict) %>% 
+  unnest()
+```
+
+```{r}
+sixmod = lm(med.tract.household.inc~Population + Poverty_Rate + Age + Proportion_Attended_College + Proportion_White + Race + Region + Race*Region, data=income_cv1)
+tidy(sixmod)
+summary(sixmod)
+
+income_cv6_sec = income_cv1 %>% 
+  crossv_kfold(100)
+
+train.model.func1 = function(data){
+  sixmod = lm(med.tract.household.inc~Population + Poverty_Rate + Age + Proportion_Attended_College + Proportion_White + Race + Region + Race*Region, data=income_cv1)
+tidy(sixmod)
+  return(sixmod)
+}
+income_cv6_third = income_cv6_sec %>%
+  mutate(tr.model = map(train,train.model.func1)) 
+
+income_cv6_predict = income_cv6_third %>% 
+  mutate(predict = map2(test,tr.model, ~augment(.y,newdata=.x))) %>% 
+  select(predict) %>% 
+  unnest()
+```
+
+$Median.Income = PovertyRate(X_i) +  Population(X_i) + ProportionWhite (X_i) + ProportionAttendedCollege(X_i) + ProportionAttendedCollege(X^2_i) + Region_j(X_i)$
+
+
+
+
+
+```{r, results="asis"}
+table <- matrix(c(bias.func(actual=income_cv1_predict$med.tract.household.inc, predict=income_cv1_predict$.fitted), mae.func(actual=income_cv1_predict$med.tract.household.inc, predict=income_cv1_predict$.fitted), RMSE.func(actual=income_cv1_predict$med.tract.household.inc, predict=income_cv1_predict$.fitted), bias.func(actual=income_cv2_predict$med.tract.household.inc, predict=income_cv2_predict$.fitted), mae.func(actual=income_cv2_predict$med.tract.household.inc, predict=income_cv2_predict$.fitted), RMSE.func(actual=income_cv2_predict$med.tract.household.inc, predict=income_cv2_predict$.fitted), bias.func(actual=income_cv4_predict$med.tract.household.inc, predict=income_cv4_predict$.fitted), mae.func(actual=income_cv4_predict$med.tract.household.inc, predict=income_cv4_predict$.fitted), RMSE.func(actual=income_cv4_predict$med.tract.household.inc, predict=income_cv4_predict$.fitted),bias.func(actual=income_cv5_predict$med.tract.household.inc, predict=income_cv5_predict$.fitted), mae.func(actual=income_cv5_predict$med.tract.household.inc, predict=income_cv5_predict$.fitted), RMSE.func(actual=income_cv5_predict$med.tract.household.inc, predict=income_cv5_predict$.fitted), bias.func(actual=income_cv6_predict$med.tract.household.inc, predict=income_cv6_predict$.fitted), mae.func(actual=income_cv6_predict$med.tract.household.inc, predict=income_cv6_predict$.fitted),RMSE.func(actual=income_cv6_predict$med.tract.household.inc, predict=income_cv6_predict$.fitted)), ncol = 3, byrow = T)
+
+colnames(table) = c("Bias", "MAE", "RMSE")
+row.names(table) = c("Base Model", "Model 2", "Model 3", "Model 4", "Model 5")
+table <- as.table(table) 
+```
+
+```{r}
+table2=xtable(table,digits=4,align=c("l","l","l","l"))
+formattable(table2)
+```
+
+## Question 2: How do gun laws relate to observations of police killings?
+
+```{r}
+
+# Web scrape the gun laws table from
+URL.gun.scorecard = "https://lawcenter.giffords.org/scorecard2015/"
+gun.scorecard = URL.gun.scorecard %>%
+                      read_html() %>%
+                      html_table(fill=1) %>%
+                      .[[1]]
+
+# Removing the minus and plus signs from the grades
+gun.scorecard$`2015 Grade`[gun.scorecard$`2015 Grade` %in% "A-"]="A"
+gun.scorecard$`2015 Grade`[gun.scorecard$`2015 Grade` %in% "B+"]="B"
+gun.scorecard$`2015 Grade`[gun.scorecard$`2015 Grade` %in% "B-"]="B"
+gun.scorecard$`2015 Grade`[gun.scorecard$`2015 Grade` %in% "C-"]="C"
+gun.scorecard$`2015 Grade`[gun.scorecard$`2015 Grade` %in% "D-"]="D"
+
+# Adding the region
+gun.scorecard<-gun.scorecard %>%
+  left_join(region.data,by="State")
+ 
+
+gun.scorecard<-pops %>%
+  select("GEO.display-label","respop72015") %>%
+  rename(State="GEO.display-label",Pop2015=respop72015) %>%
+  left_join(gun.scorecard,by="State") %>% 
+  mutate(Pop2015=as.numeric(Pop2015)) %>%
+  left_join(state.kills,by=c("state"="State"))
+
+# Remove DC and Total US
+gun.scorecard1<-gun.scorecard[-c(which(is.na(gun.scorecard$`2015 Grade`))),] %>%
+  select(-`Death Rate Per 100k`,-`New Smart Gun Laws in 2015`)
+
+# Turning the gun law grades into factors to run a regression later
+gun.scorecard2<-gun.scorecard1[-c(which(is.na(gun.scorecard1$count))),]
+
+gun.scorecard3<-gun.scorecard2 %>%
+  mutate("2015 Grade"=factor(gun.scorecard2$`2015 Grade`)) %>%
+  mutate(KillCount=count) %>%
+  select(-count)
+
+# Find how many unique groups of gun laws there are and how many kills per capita are in each
+gun.scorecard4<-gun.scorecard3 %>%
+  group_by(`2015 Grade`) %>%
+  dplyr::summarize(count.gunlaws.ranks=n(),
+                   KillCount=sum(KillCount),
+                   Population=sum(Pop2015),
+                   "Kill.per.100,000"=KillCount/Population*100000) %>%
+  ungroup()
+ 
+ggplot(gun.scorecard4)+
+  geom_col(aes(x=`2015 Grade`,y=`Kill.per.100,000`),fill="red")+
+  xlab("Gun Control Law Rankings")+
+  ylab("Police Killings per 100,000 People")+
+  ggtitle("Police Killings per 100,000 People by Type of Gun Laws")+
+  theme_dark()+
+  theme_minimal()
+  
+  
+gun.table<-gun.scorecard4 %>%
+  rename("Count of Gun Law Ranks"=count.gunlaws.ranks,"Kill Count"=KillCount,"Kill Rate per 100,000 People"=`Kill.per.100,000`)
+
+formattable(gun.table)
+
+```
+
+```{r}
+library(mapproj)
+library(usmap)
+library(ggplot2)
+library(mapdata)
+library(sf)
+
+PoliceKillingsMap = 
+  PoliceKillings %>% 
+  filter(State != "HI") %>%
+  filter(State != "AK")
+
+labs1 <- data.frame(
+long = PoliceKillingsMap$Longitude, 
+lat = PoliceKillingsMap$Latitude, 
+state = PoliceKillingsMap$State,
+stringsAsFactors = FALSE)
+
+
+us_states1 = map_data("state")
+
+us_states2 = 
+  us_states1 %>% 
+  mutate(State = region) %>% 
+  select(-subregion,-region)
+
+gun.scorecard[[1]] = tolower(gun.scorecard[[1]])
+
+us_states3 = right_join(us_states2,gun.scorecard)
+```
+
+```{r include = F}
+rename(us_states3, Rank = "2015 Grade") 
+```
+
+```{r}
+labs2 = right_join(us_states3, labs1)
+
+
+one = ggplot(data = us_states3, aes(x =long, y = lat, group = group, fill = Rank)) + guides() + coord_fixed(1.3)
+
+two = one + geom_polygon(color = "gray90", size = 0.1) + 
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+
+three = two + scale_fill_gradient(low = "white", high = "#CB454A")
+
+
+four = three +
+  geom_point(data = labs2, aes(x = long, y = lat), alpha = 0.4, size = 0.5) + 
+  ggtitle("Police Killings in States with Ranked Gun Laws")
+
+four
+```
+
+## Question 3: How do frequencies of police killings by cause of death proportionally relate to region/gun law groupings?
+
+```{r}
+gun.scorecard.causes<-pops %>%
+  select("GEO.display-label") %>%
+  rename(State="GEO.display-label") %>%
+  left_join(gun.scorecard,by="State") %>% 
+  mutate(Pop2015=as.numeric(Pop2015)) %>%
+  left_join(state.kills,by=c("state"="State"))
+
+  # Remove DC and Total US
+gun.scorecard2<-gun.scorecard1[-c(which(is.na(gun.scorecard1$`2015 Grade`))),]
+
+
+# Turning the gun law grades into factors to run a regression later
+gun.scorecard3<-gun.scorecard2[-c(which(is.na(gun.scorecard2$count))),]
+
+gun.scorecard4<-gun.scorecard3 %>%
+  mutate("2015 Grade"=factor(gun.scorecard3$`2015 Grade`)) %>%
+  mutate(KillCount=count) %>%
+  select(-count)
+
+# Find how many unique groups of gun laws there are and how many kills per capita are in each
+gun.scorecard5<-gun.scorecard4 %>%
+  group_by(`2015 Grade`) %>%
+  dplyr::summarize(count.gunlaws.ranks=n(),
+                   KillCount=sum(KillCount),
+                   Population=sum(Pop2015),
+                   "Kill.per.100,000"=KillCount/Population*100000) %>%
+  ungroup()
+
+
+
+# Plotting proportion of causes of police killings in each region
+Causes <- PoliceKillings %>% 
+  group_by(Cause_Of_Death,region) %>%
+  dplyr::summarize(count=n()) %>%
+  ungroup() %>%
+  mutate(prop=count/sum(count)) 
+
+Causes1<-Causes %>%
+  left_join(region.kills,by="region") %>%
+  mutate(Prop.cause.region=count.x/count.y)
+
+NoGun1= filter(Causes1, Cause_Of_Death != "Gunshot", Cause_Of_Death != "Unknown")
+ggplot(data=NoGun1) +
+  geom_col(aes(x=Cause_Of_Death,y=Prop.cause.region)) + 
+  xlab("Cause of Death") + ylab("Proportional of Deaths") + 
+  theme_light()+
+  facet_wrap(NoGun1$region~.)+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  ggtitle("Proportion of Police Killings in Each Region by Cause of Death")
+
+## Adding gun law ranking
+
+# Count police killings by gun law rankings
+laws.kills<-PoliceKillings %>%
+  left_join(gun.scorecard,by="region") %>%
+  select(`2015 Grade`,Cause_Of_Death) %>%
+  mutate(`2015 Grade`=factor(`2015 Grade`)) %>%
+  group_by(`2015 Grade`) %>%
+  dplyr::summarize(Kills.By.Laws=n()) %>%
+  ungroup() 
+  
+
+causes.laws<-PoliceKillings %>%
+  select(Cause_Of_Death,region) %>%
+  left_join(gun.scorecard,by="region") %>%
+  select(Cause_Of_Death,`2015 Grade`) %>%
+  group_by(Cause_Of_Death,`2015 Grade`) %>%
+  dplyr::summarize(count=n()) %>%
+  ungroup() %>%
+  left_join(laws.kills,by="2015 Grade") %>%
+  mutate(cause.prop.by.laws=count/Kills.By.Laws) %>%
+  group_by(Cause_Of_Death,`2015 Grade`)
+
+# Figure of proportional deaths by cause and gun laws
+ggplot(data=causes.laws) +
+  geom_col(aes(x=Cause_Of_Death,y=cause.prop.by.laws)) + 
+  xlab("Cause of Death") + ylab("Proportion of Deaths") + 
+  theme_light()+
+  facet_wrap(causes.laws$`2015 Grade`~.)+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  ggtitle("Proportion of Police Killings in Each Gun Law Grade")
+
+
+```
+
+## Question 4: How do frequencies of police killings by armed status proportionally relate to region/gun law groupings?
+
+
+```{r}
+# Plotting proportion of people armed/unarmed in police killings in each region
+Armed <- PoliceKillings %>% 
+  group_by(Armed,region) %>%
+  dplyr::summarize(count=n()) %>%
+  ungroup() %>%
+  mutate(prop=count/sum(count)) 
+
+Armed1<-Armed %>%
+  left_join(region.kills,by="region") %>%
+  mutate(Prop.armed.region=count.x/count.y)
+
+Armed2<-filter(Armed1,Armed != "Unknown", Armed != "Disputed")
+ggplot(data=Armed2) +
+  geom_col(aes(x=Armed,y=Prop.armed.region)) + 
+  xlab("Armed") + ylab("Proportional of Deaths") + 
+  theme_light()+
+  facet_wrap(region~.~.)+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  ggtitle("Proportion of Police Killings in Each Region by Armed Status")
+
+
+## Adding gun law rankings
+
+Armed.laws<-PoliceKillings %>%
+  select(Armed,region) %>%
+  left_join(gun.scorecard,by="region") %>%
+  select(Armed,`2015 Grade`) %>%
+  group_by(Armed,`2015 Grade`) %>%
+  dplyr::summarize(count=n()) %>%
+  ungroup() %>%
+  left_join(laws.kills,by="2015 Grade") %>%
+  mutate(armed.prop.by.laws=count/Kills.By.Laws) %>%
+  group_by(Armed,`2015 Grade`)
+
+# Figure of proportional deaths by armed status and gun laws
+Armed.laws= filter(Armed.laws, Armed != "Unknown", Armed != "Disputed")
+ggplot(data=Armed.laws) +
+  geom_col(aes(x=Armed,y=armed.prop.by.laws)) + 
+  xlab("Armed Status") + ylab("Proportion of Deaths") + 
+  theme_light()+
+  facet_wrap(Armed.laws$`2015 Grade`~.)+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  ggtitle("Proportion of Police Killings in Each Gun Law Grade")
+```

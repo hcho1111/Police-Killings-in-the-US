@@ -1,0 +1,52 @@
+state,region,State
+WA,West,Washington
+OR,West,Oregon
+CA,West,California
+AK,West,Alaska
+HI,West,Hawaii
+MT,West,Montana
+ID,West,Idaho
+NV,West,Nevada
+AZ,West,Arizona
+UT,West,Utah
+NM,West,New Mexico
+CO,West,Colorado
+WY,West,Wyoming
+ND,Midwest,North Dakota
+SD,Midwest,South Dakota
+NE,Midwest,Nebraska
+KS,Midwest,Kansas
+MO,Midwest,Missouri
+IA,Midwest,Iowa
+MN,Midwest,Minnesota
+WI,Midwest,Wisconsin
+MI,Midwest,Michigan
+IL,Midwest,Illinois
+IN,Midwest,Indiana
+OH,Midwest,Ohio
+TX,South,Texas
+OK,South,Oklahoma
+LA,South,Louisiana
+AR,South,Arkansas
+KY,South,Kentucky
+TN,South,Tennessee
+MS,South,Mississippi
+AL,South,Alabama
+FL,South,Florida
+GA,South,Georgia
+SC,South,South Carolina
+NC,South,North Carolina
+WV,South,West Virginia
+DE,South,Delaware
+MD,South,Maryland
+VA,South,Virginia
+PA,Northeast,Pennsylvania
+NY,Northeast,New York
+NJ,Northeast,New Jersey
+CT,Northeast,Connecticut
+RI,Northeast,Rhode Island
+MA,Northeast,Massachusetts
+ME,Northeast,Maine
+NH,Northeast,New Hampshire
+VT,Northeast,Vermont
+DC,South,District of Columbia

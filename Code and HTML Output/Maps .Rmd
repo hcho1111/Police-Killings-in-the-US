@@ -1,0 +1,67 @@
+---
+title: "US"
+author: "Harrison Cho"
+date: "7/17/2019"
+output: html_document
+---
+
+
+```{r}
+library(mapproj)
+library(usmap)
+library(ggplot2)
+library(mapdata)
+library(sf)
+
+PoliceKillingsMap = 
+  PoliceKillings %>% 
+  filter(State != "HI") %>%
+  filter(State != "AK")
+
+labs1 <- data.frame(
+long = PoliceKillingsMap$Longitude, 
+lat = PoliceKillingsMap$Latitude, 
+state = PoliceKillingsMap$State,
+stringsAsFactors = FALSE)
+
+
+us_states1 = map_data("state")
+
+us_states2 = 
+  us_states1 %>% 
+  mutate(State = region) %>% 
+  select(-subregion,-region)
+
+gun.scorecard2[[1]] = tolower(gun.scorecard2[[1]])
+
+us_states3 = right_join(us_states2,gun.scorecard2)
+```
+
+```{r include = F}
+rename(us_states3, Rank = "2015 Grade") 
+```
+
+```{r}
+labs2 = right_join(us_states3, labs1)
+
+
+one = ggplot(data = us_states3, aes(x =long, y = lat, group = group, fill = Rank)) + guides(fill = FALSE) + coord_fixed(1.3)
+
+two = one + geom_polygon(color = "gray90", size = 0.1) + 
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+
+three = two + scale_fill_gradient(low = "white", high = "#CB454A")
+
+
+four = three +
+  geom_point(data = labs2, aes(x = long, y = lat))
+
+four
+```
+
+
+
+
+
+
+
